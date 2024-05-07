@@ -214,7 +214,6 @@ func ReadSHBytes(bytes []byte, shSize int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return bytes[offset+COFF_START_BYTES_LEN+COFF_HEADER_SIZE+OH64_BYTE_SIZE+DD_SIZE : offset+COFF_START_BYTES_LEN+COFF_HEADER_SIZE+OH64_BYTE_SIZE+DD_SIZE+shSize], nil
 }
 
@@ -274,15 +273,16 @@ func FindBytes(src []byte, dst []byte) (int, error) {
 	}
 	return -1, fmt.Errorf("no bytes")
 }
+
 func PadBytes(bytes []byte, size int) []byte {
 	if len(bytes) < size {
 		paddingSize := size - len(bytes)
 		padding := make([]byte, paddingSize)
 		return append(bytes, padding...)
 	}
-
 	return bytes
 }
+
 func MatchBytes(src []byte, dst []byte) bool {
 	for i := range dst {
 		if src[i] != dst[i] {
