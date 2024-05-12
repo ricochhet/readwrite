@@ -16,18 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package readwrite
+package readwrite_test
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"testing"
+
+	"github.com/ricochhet/readwrite/readwrite"
 )
 
+var errUnexpectedBytes = errors.New("unexpected bytes")
+
 func TestUtf8ToUtf16(t *testing.T) {
-	b := Utf8ToUtf16("aaabbbccc")
+	t.Parallel()
+
+	b := readwrite.Utf8ToUtf16("aaabbbccc")
 	o := []byte{97, 0, 97, 0, 97, 0, 98, 0, 98, 0, 98, 0, 99, 0, 99, 0, 99, 0}
+
 	if !bytes.Equal(b, o) {
-		t.Fatal(fmt.Errorf("unexpected bytes"))
+		t.Fatal(errUnexpectedBytes)
 	}
 }

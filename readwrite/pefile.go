@@ -21,49 +21,62 @@ package readwrite
 import (
 	"debug/pe"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"io"
 	"log"
 	"os"
 )
 
+var (
+	errInvalidOffsetOrByteRange = errors.New("invalid offset or byte range")
+	errSectionHeaderIsSizeZero  = errors.New("section header size is 0")
+	errSectionIsNil             = errors.New("section is nil")
+	errNoBytes                  = errors.New("no bytes")
+)
+
 // COFFHeader
 // 0x50, 0x45 = PE
-// COFF_START_BYTES_LEN == len(COFF_START_BYTES)
-var COFF_START_BYTES = []byte{0x50, 0x45, 0x00, 0x00}
+// COFF_START_BYTES_LEN == len(COFFStartBytes).
+var COFFStartBytes = []byte{0x50, 0x45, 0x00, 0x00} //nolint:gochecknoglobals // wontfix
 
-const COFF_START_BYTES_LEN = 4
-const COFF_HEADER_SIZE = 20
+const (
+	COFFStartBytesLen = 4
+	COFFHeaderSize    = 20
+)
 
 // OptionalHeader64
 // https://github.com/golang/go/blob/master/src/debug/pe/pe.go
 // uint byte size of OptionalHeader64 without magic mumber(2 bytes) or data directory(128 bytes)
 // OptionalHeader64 size is 240
-// (110)
-var OH64_BYTE_SIZE = binary.Size(OptionalHeader64X110{})
+// (110).
+var OH64ByteSize = binary.Size(OptionalHeader64X110{}) //nolint:exhaustruct,gochecknoglobals // wontfix
 
 // DataDirectory
-// 16 entries * 8 bytes / entry
-const DD_SIZE = 128
-const DD_ENTRY_SIZE = 8
+// 16 entries * 8 bytes / entry.
+const (
+	DataDirSize      = 128
+	DataDirEntrySize = 8
+)
 
 // SectionHeader32
 // https://github.com/golang/go/blob/master/src/debug/pe/section.go
 // uint byte size of SectionHeader32 without name(8 bytes) or characteristics(4 bytes)
-// (28)
-var SH32_SIZE = binary.Size(SectionHeader32X28{})
+// (28).
+var SH32ByteSize = binary.Size(SectionHeader32X28{}) //nolint:exhaustruct,gochecknoglobals // wontfix
 
-const SH32_ENTRY_SIZE = 64
-const SH32_NAME_SIZE = 8
-const SH32_CHARACTERISTICS_SIZE = 4
+const (
+	SH32EntrySize           = 64
+	SH32NameSize            = 8
+	SH32CharacteristicsSize = 4
+)
 
-// Data structure
+// Data structure.
 type Data struct {
 	Bytes []byte
 	PE    pe.File
 }
 
-// Section structure (.ooa)
+// Section structure (.ooa).
 type Section struct {
 	ContentID   string
 	OEP         uint64
@@ -75,7 +88,7 @@ type Section struct {
 	RelocDir    DataDir
 }
 
-// Import structure (.ooa)
+// Import structure (.ooa).
 type Import struct {
 	Characteristics uint32
 	Timedatestamp   uint32
@@ -84,19 +97,19 @@ type Import struct {
 	FThunk          uint32
 }
 
-// Thunk structure (.ooa)
+// Thunk structure (.ooa).
 type Thunk struct {
 	Function uint32
 	DataAddr uint32
 }
 
-// DataDir structure (.ooa)
+// DataDir structure (.ooa).
 type DataDir struct {
 	VA   uint32
 	Size uint32
 }
 
-// EncBlock structure (.ooa)
+// EncBlock structure (.ooa).
 type EncBlock struct {
 	VA          uint32
 	RawSize     uint32
@@ -154,39 +167,46 @@ type SectionHeader32X28 struct {
 }
 
 func Open(path string) (*Data, error) {
-	m := new(Data)
-	f, err := os.Open(path)
-	if err != nil {
+	newData := new(Data)
+	file, err := os.Open(path)
+	if err != nil { //nolint:wsl // gofumpt conflict
 		return nil, err
 	}
-	ff, err := pe.NewFile(f)
+
+	pefile, err := pe.NewFile(file)
 	if err != nil {
-		f.Close()
+		file.Close()
 		return nil, err
 	}
-	ra, err := io.ReadAll(f)
+
+	allBytes, err := io.ReadAll(file)
 	if err != nil {
-		f.Close()
+		file.Close()
 		return nil, err
 	}
-	m.Bytes = ra
-	m.PE = *ff
-	return m, nil
+
+	newData.Bytes = allBytes
+	newData.PE = *pefile
+
+	return newData, nil
 }
 
 func WriteBytes(bytes []byte, offset int, replace []byte) error {
 	if offset < 0 || offset+len(replace) > len(bytes) {
-		return fmt.Errorf("invalid offset or byte range")
+		return errInvalidOffsetOrByteRange
 	}
+
 	copy(bytes[offset:], replace)
+
 	return nil
 }
 
 func ReadCOFFHeaderOffset(bytes []byte) (int, error) {
-	offset, err := FindBytes(bytes, COFF_START_BYTES)
+	offset, err := FindBytes(bytes, COFFStartBytes)
 	if err != nil {
 		return -1, err
 	}
+
 	return offset, nil
 }
 
@@ -195,35 +215,42 @@ func ReadDDBytes(bytes []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bytes[offset+COFF_START_BYTES_LEN+COFF_HEADER_SIZE+OH64_BYTE_SIZE : offset+COFF_START_BYTES_LEN+COFF_HEADER_SIZE+OH64_BYTE_SIZE+DD_SIZE], nil
+
+	return bytes[offset+COFFStartBytesLen+COFFHeaderSize+OH64ByteSize : offset+COFFStartBytesLen+COFFHeaderSize+OH64ByteSize+DataDirSize], nil
 }
 
 func ReadDDEntryOffset(bytes []byte, entryVirtualAddress uint32, entrySize uint32) (int, error) {
-	dd, err := ReadDDBytes(bytes)
+	dataDir, err := ReadDDBytes(bytes)
 	if err != nil {
 		return -1, err
 	}
-	entryBytes := make([]byte, 8)
+
+	entryBytes := make([]byte, DataDirEntrySize)
 	binary.LittleEndian.PutUint32(entryBytes[:4], entryVirtualAddress)
 	binary.LittleEndian.PutUint32(entryBytes[4:], entrySize)
-	rva, err := FindBytes(dd, entryBytes)
+	rva, err := FindBytes(dataDir, entryBytes)
+
 	if err != nil || rva == -1 {
 		log.Fatal(err)
 		return -1, err
 	}
+
 	offset, err := ReadCOFFHeaderOffset(bytes)
 	if err != nil {
 		return -1, err
 	}
-	return offset + COFF_START_BYTES_LEN + COFF_HEADER_SIZE + OH64_BYTE_SIZE + rva, nil
+
+	return offset + COFFStartBytesLen + COFFHeaderSize + OH64ByteSize + rva, nil
 }
 
 func ReadSHSize(file pe.File) (int, error) {
 	sections := len(file.Sections)
-	size := sections * SH32_ENTRY_SIZE
+	size := sections * SH32EntrySize
+
 	if size == 0 {
-		return -1, fmt.Errorf("section header size is 0")
+		return -1, errSectionHeaderIsSizeZero
 	}
+
 	return size, nil
 }
 
@@ -232,7 +259,8 @@ func ReadSHBytes(bytes []byte, shSize int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bytes[offset+COFF_START_BYTES_LEN+COFF_HEADER_SIZE+OH64_BYTE_SIZE+DD_SIZE : offset+COFF_START_BYTES_LEN+COFF_HEADER_SIZE+OH64_BYTE_SIZE+DD_SIZE+shSize], nil
+
+	return bytes[offset+COFFStartBytesLen+COFFHeaderSize+OH64ByteSize+DataDirSize : offset+COFFStartBytesLen+COFFHeaderSize+OH64ByteSize+DataDirSize+shSize], nil //nolint:lll // wontfix
 }
 
 func ReadSHEntryOffset(bytes []byte, address int) (int, error) {
@@ -240,64 +268,76 @@ func ReadSHEntryOffset(bytes []byte, address int) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	return offset + COFF_START_BYTES_LEN + COFF_HEADER_SIZE + OH64_BYTE_SIZE + DD_SIZE + address, nil
+
+	return offset + COFFStartBytesLen + COFFHeaderSize + OH64ByteSize + DataDirSize + address, nil
 }
 
 func ReadSectionBytes(file *Data, sectionVirtualAddress uint32, sectionSize uint32) ([]byte, error) {
 	var section *pe.Section
+
 	for _, s := range file.PE.Sections {
 		if sectionVirtualAddress >= s.VirtualAddress && sectionVirtualAddress < s.VirtualAddress+s.Size {
 			section = s
 			break
 		}
 	}
+
 	if section == nil {
-		return nil, fmt.Errorf("section is nil")
+		return nil, errSectionIsNil
 	}
+
 	offset := sectionVirtualAddress - section.VirtualAddress + section.Offset
 	bytes := file.Bytes[offset : offset+sectionSize]
+
 	return bytes, nil
 }
 
-func ReadImport(reader io.Reader) Import {
+func ReadImport(reader io.Reader) (Import, error) {
 	var importData Import
-	binary.Read(reader, binary.LittleEndian, &importData)
-	return importData
+	err := binary.Read(reader, binary.LittleEndian, &importData)
+
+	return importData, err
 }
 
-func ReadThunk(reader io.Reader) Thunk {
+func ReadThunk(reader io.Reader) (Thunk, error) {
 	var thunkData Thunk
-	binary.Read(reader, binary.LittleEndian, &thunkData)
-	return thunkData
+	err := binary.Read(reader, binary.LittleEndian, &thunkData)
+
+	return thunkData, err
 }
 
-func ReadDataDir(reader io.Reader) DataDir {
+func ReadDataDir(reader io.Reader) (DataDir, error) {
 	var dataDir DataDir
-	binary.Read(reader, binary.LittleEndian, &dataDir)
-	return dataDir
+	err := binary.Read(reader, binary.LittleEndian, &dataDir)
+
+	return dataDir, err
 }
 
-func ReadEncBlock(reader io.Reader) EncBlock {
+func ReadEncBlock(reader io.Reader) (EncBlock, error) {
 	var encBlock EncBlock
-	binary.Read(reader, binary.LittleEndian, &encBlock)
-	return encBlock
+	err := binary.Read(reader, binary.LittleEndian, &encBlock)
+
+	return encBlock, err
 }
 
 func FindBytes(src []byte, dst []byte) (int, error) {
-	for i := 0; i < len(src)-len(dst)+1; i++ {
+	for i := range src[:len(src)-len(dst)+1] {
 		if MatchBytes(src[i:i+len(dst)], dst) {
 			return i, nil
 		}
 	}
-	return -1, fmt.Errorf("no bytes")
+
+	return -1, errNoBytes
 }
 
 func PadBytes(bytes []byte, size int) []byte {
 	if len(bytes) < size {
 		paddingSize := size - len(bytes)
 		padding := make([]byte, paddingSize)
+
 		return append(bytes, padding...)
 	}
+
 	return bytes
 }
 
@@ -307,5 +347,6 @@ func MatchBytes(src []byte, dst []byte) bool {
 			return false
 		}
 	}
+
 	return true
 }

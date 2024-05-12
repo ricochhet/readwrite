@@ -47,6 +47,7 @@ func FindByHash(data []DataEntry, hash uint32) *DataEntry {
 			return &entry
 		}
 	}
+
 	return nil
 }
 
@@ -56,20 +57,25 @@ func FindByFileName(data []DataEntry, fileName string) *DataEntry {
 			return &entry
 		}
 	}
+
 	return nil
 }
 
-func NewWriter(fileName string, append bool) (*Writer, error) {
+func NewWriter(fileName string, appendMode bool) (*Writer, error) {
 	var file *os.File
+
 	var err error
-	if append {
-		file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+
+	if appendMode {
+		file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 	} else {
-		file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &Writer{file}, nil
 }
 
@@ -114,11 +120,18 @@ func (w *Writer) Size() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer w.file.Seek(currentPos, io.SeekStart)
+
+	defer func() {
+		if _, err := w.file.Seek(currentPos, io.SeekStart); err != nil {
+			panic(err)
+		}
+	}()
+
 	fileSize, err := w.file.Seek(0, io.SeekEnd)
 	if err != nil {
 		return 0, err
 	}
+
 	return fileSize, nil
 }
 

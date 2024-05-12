@@ -33,6 +33,7 @@ func NewReader(fileName string) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Reader{file}, nil
 }
 
@@ -43,12 +44,14 @@ func (r *Reader) IsValid() bool {
 func (r *Reader) ReadUInt32() (uint32, error) {
 	var value uint32
 	err := binary.Read(r.file, binary.LittleEndian, &value)
+
 	return value, err
 }
 
 func (r *Reader) ReadUInt64() (uint64, error) {
 	var value uint64
 	err := binary.Read(r.file, binary.LittleEndian, &value)
+
 	return value, err
 }
 
@@ -59,6 +62,7 @@ func (r *Reader) Read(data []byte) (int, error) {
 func (r *Reader) ReadChar() (byte, error) {
 	var value byte
 	err := binary.Read(r.file, binary.LittleEndian, &value)
+
 	return value, err
 }
 
@@ -87,11 +91,18 @@ func (r *Reader) Size() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer r.file.Seek(currentPos, io.SeekStart)
+
+	defer func() {
+		if _, err := r.file.Seek(currentPos, io.SeekStart); err != nil {
+			panic(err)
+		}
+	}()
+
 	fileSize, err := r.file.Seek(0, io.SeekEnd)
 	if err != nil {
 		return 0, err
 	}
+
 	return fileSize, nil
 }
 
