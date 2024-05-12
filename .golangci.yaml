@@ -30,7 +30,7 @@ linters-settings:
             prevent_unmaintained_packages:
                 allow:
                     - $gostd
-                    - github.com/ricochhet/readwrite/readwrite
+                    - github.com/ricochhet/readwrite
 issues:
     exclude-dirs:
         - thirdparty/

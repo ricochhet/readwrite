@@ -23,7 +23,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ricochhet/readwrite/readwrite"
+	"github.com/ricochhet/readwrite"
 )
 
 var errUnexpectedBytes = errors.New("unexpected bytes")
