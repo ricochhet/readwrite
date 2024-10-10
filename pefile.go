@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"log"
 	"os"
 )
 
@@ -166,6 +165,8 @@ type SectionHeader32X28 struct {
 	NumberOfLineNumbers  uint16
 }
 
+var errRVALessThanOne = errors.New("rva is equal to '-1'")
+
 func Open(path string) (*Data, error) {
 	newData := new(Data)
 	file, err := os.Open(path)
@@ -231,7 +232,10 @@ func ReadDDEntryOffset(bytes []byte, entryVirtualAddress uint32, entrySize uint3
 	rva, err := FindBytes(dataDir, entryBytes)
 
 	if err != nil || rva == -1 {
-		log.Fatal(err)
+		if err == nil {
+			return -1, errRVALessThanOne
+		}
+
 		return -1, err
 	}
 
